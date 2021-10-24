@@ -50,15 +50,15 @@ pacman -S grub efibootmgr dosfstools os-prober mtools openssh
 if fdisk -l | grep -q "EFI System"
 then
 
-# UEFI
-mkdir /boot/EFI
-mount /dev/vda1 /boot/EFI
-grub-install --target=x86_64-efi --bootloader-id=grub-efi --recheck
+  # UEFI
+  mkdir /boot/EFI
+  mount /dev/vda1 /boot/EFI
+  grub-install --target=x86_64-efi --bootloader-id=grub-efi --recheck
 
 else
 
-# BIOS
-grub-install --target=i386-pc /dev/vda
+  # BIOS
+  grub-install --target=i386-pc /dev/vda
 
 fi
 

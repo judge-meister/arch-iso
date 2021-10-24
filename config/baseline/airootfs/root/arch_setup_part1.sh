@@ -21,6 +21,15 @@ do
   read BOOT
 done
 
+echo ""
+# -- question - Manual or Automatic
+while [ "$PARTITION" != "m" ] && [ "$PARTITION" != 'a' ]
+do
+  echo -ne "\nManual or Automatic Partitioning ? [a/p] "
+  read PARTITION
+done
+
+
 # swapsize is 2*RAM or 8GB which ever is smaller
 MEMSIZE=$(lsmem -o SIZE -P | awk -F'"' '{print $2}' | sed 's|G||g')
 SWAPSIZE=$((MEMSIZE*2))
@@ -32,35 +41,38 @@ fi
 if [ "$BOOT" == "b" ]
 then
 
-### USING BIOS ###
+  ### USING BIOS ###
 
-# get hard disk
-if [ "$(ls /dev/[sxv]d? | wc -l)" -eq 1 ]
-then
-  DISK=$(ls /dev/[sxv]d?)
-  echo "Found $DISK"
-else
-  lsblk
-  # -- question - ask which disk
-  while [ ! -b "$DISK" ]
-  do
-    echo "Enter disk device name: [/dev/vda] "
-    read DISK
-  done
-fi
+  # get hard disk
+  if [ "$(ls /dev/[sxv]d? | wc -l)" -eq 1 ]
+  then
+    DISK=$(ls /dev/[sxv]d?)
+    echo "Found $DISK"
+  else
+    lsblk
+    # -- question - ask which disk
+    while [ ! -b "$DISK" ]
+    do
+      echo "Enter disk device name: [eg. /dev/sda] "
+      read DISK
+    done
+  fi
 
-DISK_SIZE=$(lsblk $DISK | grep "^${DISK}" | awk -F' ' '{print $4}' | sed 's|G||')
+  DISK_SIZE=$(lsblk $DISK | grep "^${DISK}" | awk -F' ' '{print $4}' | sed 's|G||')
 
-# for a BIOS based install
-# create DOS partition table (grub-install requires DOS)
-# o,
-# n, p, 1, (def), +28G,
-# n, p, 2, (def), (def), t, 2, 82
-# w
+  # for a BIOS based install
+  # create DOS partition table (grub-install requires DOS)
+  # o,
+  # n, p, 1, (def), +28G,
+  # n, p, 2, (def), (def), t, 2, 82
+  # w
 
-echo "Partitioning Disk ..."
+  echo -e "\nPartitioning Disk ..."
 
-fdisk "$DISK" <<-EOF
+  if [ "$PARTITION" == "a" ]
+  then
+
+    fdisk "$DISK" <<-EOF
 o
 n
 p
@@ -79,36 +91,50 @@ p
 w
 EOF
 
+  else
+    fdisk "$DISK"
+  fi
 
-# make filesystems
+  # make filesystems
 
-echo -e "\nMaking Swap..."
-mkswap /dev/vda2
-echo -e "\nMaking Ext4 partition ..."
-mkfs.ext4 /dev/vda1
+  echo -e "\nMaking Swap..."
+  mkswap ${DISK}2
+  echo -e "\nMaking Ext4 partition ..."
+  mkfs.ext4 ${DISK}1
 
-# mount disks
+  if [ -b "${DISK}3" ]
+  then
+    echo -e "\nMaking Ext4 partition ..."
+    mkfs.ext4 ${DISK}3
+  fi
 
-echo -e "\nMounting Disks ..."
-mount /dev/vda1 /mnt
-swapon /dev/vda2
+
+  # mount disks
+
+  echo -e "\nMounting Disks ..."
+  mount ${DISK}1 /mnt
+  swapon ${DISK}2
 
 
-# -------------------------------------
+  # -------------------------------------
 else
 
-### USING UEFI ###
+  ### USING UEFI ###
 
-# for a EFI based install
-# create 3 partitions (assuming 30G disk)
-#vda1 550MB @ start of disk, type EFI, formatted MSDOS 
-#vda2 8GB @ end of disk, type Linux swap
-#vda3 28GB the rest of the disk, type Linux, formatted ext4
-#fdisk -l
+  # for a EFI based install
+  # create 3 partitions (assuming 30G disk)
+  #vda1 550MB @ start of disk, type EFI, formatted MSDOS 
+  #vda2 8GB @ end of disk, type Linux swap
+  #vda3 28GB the rest of the disk, type Linux, formatted ext4
+  #fdisk -l
 
-echo "Partitioning Disk ..."
-# gpt partition
-fdisk /dev/vda <<-EOF
+  echo "Partitioning Disk ..."
+
+  if [ "$PARTITION" == "a" ]
+  then
+
+    # gpt partition
+    fdisk ${DISK} <<-EOF
 g
 n
 1
@@ -132,19 +158,30 @@ p
 w
 EOF
 
-# make filesystems
+  else
+    fdisk "$DISK"
+  fi
 
-echo -e "\nMaking Swap ..."
-mkswap /dev/vda2
-echo -e "\nMaking Ext4 partition ..."
-mkfs.ext4 /dev/vda3
-echo -e "\nMaking FAT32 partition ..."
-mkfs.fat -F32 /dev/vda1
+  # make filesystems
 
-# mount disks
-echo -e "\nMounting Disks ..."
-mount /dev/vda3 /mnt
-swapon /dev/vda2
+  echo -e "\nMaking Swap ..."
+  mkswap ${DISK}2
+  echo -e "\nMaking Ext4 partition ..."
+  mkfs.ext4 ${DISK}3
+  echo -e "\nMaking FAT32 partition ..."
+  mkfs.fat -F32 ${DISK}1
+
+  if [ -b "${DISK}4" ]
+  then
+    echo -e "\nMaking Ext4 partition ..."
+    mkfs.ext4 ${DISK}4
+  fi
+
+  # mount disks
+  echo -e "\nMounting Disks ..."
+  mount ${DISK}3 /mnt
+  swapon ${DISK}2
+
 
 fi
 
